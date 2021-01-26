@@ -1,0 +1,23 @@
+# NOTE - you also need to install my version of pycocotools:
+# https://github.com/jayelm/cocoapi
+name: compexp
+channels:
+  - conda-forge
+dependencies:
+  # I haven't specified pytorch here
+  - pandas
+  - tqdm
+  - imageio
+  - scipy
+  - matplotlib
+  - Pillow
+  - seaborn
+  - scikit-image
+  - pyparsing
+  - nltk
+  - spacy
+  - pip
+  - scikit-learn
+  - cython
+  - pip:
+    - pyeda

@@ -1,0 +1,166 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup}
+library(tidyverse)
+library(cowplot)
+theme_set(theme_cowplot())
+```
+
+# Plotting formula complexity statistics (2020-02-05)
+
+```{r}
+RN18_FNAME <- '../result/resnet18_cub_cub_representation_3/input_layer4_256.csv'
+
+rn18 <- read_csv(RN18_FNAME) %>%
+  mutate(correct = pred_label == true_label) %>%
+  filter(score != 1) %>%
+  gather('stat', 'value', ends_with('coverage'))
+
+t_tests <- rn18 %>%
+  group_by(stat, correct) %>%
+  summarise(value = list(value)) %>%
+  spread(correct, value) %>%
+  group_by(stat) %>%
+  mutate(
+    p_value = t.test(unlist(`FALSE`), unlist(`TRUE`))$p.value
+  )
+
+ggplot(rn18, aes(x = correct, y = value, fill = correct)) +
+  geom_text(data = t_tests, mapping = aes(label = round(p_value, 3)), x = 1.5, y = 0, inherit.aes = F) +
+  geom_boxplot() +
+  facet_wrap(~ stat, scales = 'free_y') +
+  guides(fill = FALSE) +
+  ggtitle('Resnet18 predictions')
+
+# rn18 %>% arrange(label_coverage) %>% head
+```
+
+# Resnet18 vs Conv4 (can you tell a bad classifier apart?) (2020-02-07)
+```{r}
+CONV4_FNAME <- '../result/conv4_cub_cub_representation_3/input_trunk-3_256.csv'
+
+conv4 <- read_csv(CONV4_FNAME) %>%
+  mutate(correct = pred_label == true_label) %>%
+  filter(score != 1) %>%
+  gather('stat', 'value', ends_with('coverage'))
+
+both <- bind_rows(conv4 %>% mutate(model = 'conv4'), rn18 %>% mutate(model = 'rn18'))
+
+t_tests <- both %>%
+  group_by(stat, model) %>%
+  summarise(value = list(value)) %>%
+  spread(model, value) %>%
+  group_by(stat) %>%
+  mutate(
+    p_value = t.test(unlist(conv4), unlist(rn18))$p.value
+  )
+
+ggplot(both, aes(x = model, y = value, fill = model)) +
+  geom_boxplot() +
+  geom_text(data = t_tests, mapping = aes(label = round(p_value, 3)), x = 1.5, y = 0, inherit.aes = F) +
+  facet_wrap(~ stat, scales = 'free_y') +
+  ggtitle('Conv4 vs Resnet18')
+```
+
+# IoU x formula length for broden (2020-02-01)
+
+```{r}
+# r1 <- read_csv('../result/resnet18_places365_broden_ade20k_neuron_1/tally.csv') %>%
+#   mutate(length = 1)
+# r2 <- read_csv('../result/resnet18_places365_broden_ade20k_neuron_2/tally.csv') %>%
+#   mutate(length = 2)
+# r3 <- read_csv('../result/resnet18_places365_broden_ade20k_neuron_3/tally.csv') %>%
+#   mutate(length = 3)
+# r4 <- read_csv('../result/resnet18_places365_broden_ade20k_neuron_4/tally.csv') %>%
+#   mutate(length = 4)
+
+r1 <- read_csv('tally_1.csv') %>%
+  mutate(length = 1) %>%
+  select(unit, category, label, score, length)
+r2 <- read_csv('tally_2.csv') %>%
+  mutate(length = 2) %>%
+  select(unit, category, label, score, length)
+r3 <- read_csv('tally_3.csv') %>%
+  mutate(length = 3) %>%
+  select(unit, category, label, score, length)
+r4 <- read_csv('tally_4.csv') %>%
+  mutate(length = 4) %>%
+  select(unit, category, label, score, length)
+
+rs <- rbind(r1, r2, r3, r4)
+
+ggplot(rs, aes(x = factor(length), fill = factor(length), y = score)) +
+  ylab('IoU') +
+  geom_boxplot() +
+  xlab('Max formula length') +
+  guides(fill = FALSE)
+
+ggplot(rs, aes(x = score, fill = factor(length))) +
+  geom_histogram()
+```
+
+# Correlations between neuron firing patterns (2020-02-07)
+
+```{r fig.width=10, fig.height=10}
+corr <- read.table('../corr.txt', sep = ' ') %>%
+  as.matrix
+
+iou_contrib <- 1 - (read.table('../iou_contrib.txt', sep = ' ') %>%
+  as.matrix)
+
+iou_inhib <- 1 - (read.table('../iou_inhib.txt', sep = ' ') %>%
+  as.matrix)
+
+wt <- read.table('../weight.txt', sep = ' ') %>%
+  as.matrix %>% t
+
+# diag(corr) <- NA
+
+library(RColorBrewer)
+col <- colorRampPalette(c("#67001F", "#B2182B", "#D6604D", "#F4A582",
+                          "#FDDBC7", "#FFFFFF", "#D1E5F0", "#92C5DE",
+                          "#4393C3", "#2166AC", "#053061"))(200)
+# gplots::heatmap.2(corr, col = col, trace = 'none', Rowv = T, Colv = T)
+
+mets <- data.frame(
+  corr = as.vector(corr),
+  iou_contrib = as.vector(iou_contrib),
+  iou_inhib = as.vector(iou_inhib),
+  weight = as.vector(wt)
+) %>% as_tibble
+
+ggplot(mets, aes(x = corr, y = weight)) +
+  geom_point() +
+  geom_smooth(method = 'lm')
+```
+
+
+# Confusion matrix (2020-02-14)
+
+```{r}
+library(caret)
+library(e1071)
+library(gridExtra)   # to put more
+library(grid)        # plot together
+
+preds <- read_csv('../result/resnet18_places365_broden_ade20k_neuron_3/preds.csv')
+all_cls <- sort(unique(c(preds$pred, preds$target)))
+preds <- preds %>%
+  mutate(pred = factor(pred, levels = all_cls),
+         target = factor(target, levels = all_cls))
+
+cm <- t(caret::confusionMatrix(preds$pred, preds$target)$table)
+supp <- rowSums(cm)
+cm_norm <- cm / supp
+
+blues <- RColorBrewer::brewer.pal(9, 'Blues')
+pdf(file = 'cm.pdf')
+# Export as 40 by 40
+gplots::heatmap.2(cm_norm, trace = 'none', Rowv = F, Colv = F, dendrogram = 'none',
+                  col = colorRampPalette(blues)(200))
+dev.off()
+```
+
