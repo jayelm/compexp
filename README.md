@@ -1,7 +1,6 @@
 # Compositional Explanations of Neurons
 
-
-**Coming soon!**
+Vision code has been released - NLI coming soon!
 
 https://arxiv.org/abs/2006.14032
 
