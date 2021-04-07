@@ -1,0 +1,63 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+library(tidyverse)
+library(cowplot)
+theme_set(theme_cowplot())
+```
+
+```{r}
+df5k <- read_csv('../exp/debug_step_5000-3/result.csv') %>%
+  mutate(iter = 5000)
+df35k <- read_csv('../exp/debug_step_35000-3/result.csv') %>%
+  mutate(iter = 35000)
+df50k <- read_csv('../exp/debug_step_50000-3/result.csv') %>%
+  mutate(iter = 50000)
+df75k <- read_csv('../exp/debug_step_75000-3/result.csv') %>%
+  mutate(iter = 75000)
+df100k <- read_csv('../exp/debug_step_100000-3/result.csv') %>%
+  mutate(iter = 100000)
+
+df1 <- read_csv('../exp/debug_step_35000-1/result.csv') %>%
+  mutate(maxlen = 1)
+df2 <- read_csv('../exp/debug_step_35000-2/result.csv') %>%
+  mutate(maxlen = 2)
+df3 <- read_csv('../exp/debug_step_35000-3/result.csv') %>%
+  mutate(maxlen = 3)
+dfl <- bind_rows(df1, df2, df3)
+
+ggplot(dfl, aes(x = maxlen, y = iou, color = iou, group = neuron)) +
+  geom_line() +
+  guides(fill = FALSE)
+
+df4 <- read_csv('../exp/debug_step_35000-4/result.csv')
+
+df35krand <- read_csv('../exp/debug_step_35000-3-shuffled/result.csv') %>%
+  mutate(iter = 35000)
+vsrandom <- bind_rows(
+  df35k %>% mutate(mode = 'std'),
+  df35krand %>% mutate(mode = 'random')
+)
+ggplot(vsrandom, aes(x = mode, y = iou, fill = mode)) +
+  geom_boxplot() +
+  guides(fill = FALSE)
+
+
+df <- df35k
+df <- bind_rows(df5k, df35k, df50k, df75k, df100k)
+
+# As training progresses
+ggplot(df, aes(x = iter, y = feature_length, fill = iter, group = iter)) +
+  geom_violin() +
+  guides(fill = FALSE)
+
+# Also considder geom line, grouping by unit. Do high iou things staty high iou?
+ggplot(df, aes(x = factor(iter), y = iou, group = neuron, color = iou)) +
+  geom_line() +
+  guides(fill = FALSE)
+```
+
